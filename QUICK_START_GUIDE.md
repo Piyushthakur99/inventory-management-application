@@ -42,13 +42,11 @@
 2. **Get connection string:**
    - Click "Connect" on your cluster
    - Choose "Connect your application"
-   - Copy the connection string (looks like: `mongodb+srv://username:password@cluster.mongodb.net/`)
+   - Copy the connection string
 
 3. **Update application.properties:**
    ```properties
    # Replace this line in backend/src/main/resources/application.properties
-   spring.data.mongodb.uri=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/inventory_db
-   ```
 
 4. **Restart the backend:**
    - Stop the current backend (Ctrl+C in terminal)
