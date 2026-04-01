@@ -60,6 +60,7 @@ public class ProductController {
     }
 
     @PatchMapping("/{id}/stock")
+    @PreAuthorize("hasAnyRole('ADMIN','STAFF')")
     public ResponseEntity<Product> updateStock(@PathVariable String id,
                                                @RequestBody Map<String, Object> body) {
         int quantityChange = (Integer) body.get("quantityChange");

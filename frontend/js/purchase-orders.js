@@ -1,10 +1,44 @@
 // purchase-orders.js - Purchase order management
 let allOrders = [], filteredOrders = [], allVendors = [], allProducts = [];
 let orderItemCount = 0;
+let currentOrderStatusFilter = 'ALL';
+let orderSearchQuery = '';
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadPrereqs();
+  try {
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q) {
+      const searchEl = document.getElementById('orderSearch');
+      if (searchEl) searchEl.value = q;
+      orderSearchQuery = String(q || '').toLowerCase().trim();
+    }
+  } catch (_) {}
+
+  let action = null;
+  try {
+    action = new URLSearchParams(window.location.search).get('action');
+  } catch (_) {}
+
+  const prereqsPromise = loadPrereqs();
+  prereqsPromise.then(() => {
+    if (action === 'create') {
+      openCreateOrderModal();
+    }
+  });
+
   loadOrders();
+
+  const searchEl = document.getElementById('orderSearch');
+  if (searchEl) {
+    let timer;
+    searchEl.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        orderSearchQuery = (searchEl.value || '').toLowerCase().trim();
+        applyOrderFilters();
+      }, 250);
+    });
+  }
 });
 
 async function loadPrereqs() {
@@ -16,29 +50,64 @@ async function loadPrereqs() {
 
 async function loadOrders() {
   const tbody = document.getElementById('orderTableBody');
-  tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+  tbody.innerHTML = skeletonTableRows(7, 6, { firstTdClass: 'ps-4', lastTdClass: 'pe-4 text-end' });
   try {
     allOrders = await api.get('/api/orders');
-    filteredOrders = allOrders;
-    document.getElementById('orderCount').textContent = allOrders.length + ' orders';
-    renderOrderRows(filteredOrders);
+    currentOrderStatusFilter = 'ALL';
+    applyOrderFilters();
   } catch(err) {
     tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">'+err.message+'</td></tr>';
   }
 }
 
 function filterOrders(status) {
+  currentOrderStatusFilter = status;
   document.querySelectorAll('[id^="filter"]').forEach(b => b.classList.remove('active'));
   document.getElementById('filter' + status)?.classList.add('active');
-  filteredOrders = status === 'ALL' ? allOrders : allOrders.filter(o => o.status === status);
-  document.getElementById('orderCount').textContent = filteredOrders.length + ' orders';
+  applyOrderFilters();
+}
+
+function applyOrderFilters() {
+  const status = currentOrderStatusFilter;
+  const q = orderSearchQuery;
+
+  const venMap = {};
+  allVendors.forEach(v => { venMap[v.id] = v.name; });
+
+  filteredOrders = allOrders.filter(o => {
+    const matchStatus = status === 'ALL' || o.status === status;
+    if (!matchStatus) return false;
+    if (!q) return true;
+
+    const orderNo = String(o.orderNumber || '').toLowerCase();
+    const vendorName = String(venMap[o.vendorId] || o.vendorId || '').toLowerCase();
+    const st = String(o.status || '').toLowerCase();
+    return orderNo.includes(q) || vendorName.includes(q) || st.includes(q);
+  });
+
+  const countEl = document.getElementById('orderCount');
+  if (countEl) countEl.textContent = filteredOrders.length + ' orders';
   renderOrderRows(filteredOrders);
 }
 
 function renderOrderRows(orders) {
   const tbody = document.getElementById('orderTableBody');
   if (!orders.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">No orders found</td></tr>';
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="py-0">
+          <div class="empty-state empty-state--table">
+            <div class="icon"><i class="bi bi-cart3"></i></div>
+            <div class="title">No orders found</div>
+            <div class="subtitle">Try changing the status filter or search term.</div>
+            <div class="actions">
+              <button type="button" class="btn btn-sm btn-primary" onclick="openCreateOrderModal()">
+                <i class="bi bi-plus-lg me-1"></i> Create Order
+              </button>
+            </div>
+          </div>
+        </td>
+      </tr>`;
     return;
   }
   const venMap = {};
@@ -61,6 +130,7 @@ function renderOrderRows(orders) {
 }
 
 function openCreateOrderModal() {
+  if (!canCreateOrder()) { showToast('Access denied', 'warning'); return; }
   orderItemCount = 0;
   document.getElementById('orderItemsContainer').innerHTML = '';
   document.getElementById('orderVendor').innerHTML = '<option value="">-- Select Vendor --</option>';
@@ -77,6 +147,7 @@ function openCreateOrderModal() {
 }
 
 function addOrderItem() {
+  if (!canCreateOrder()) { showToast('Access denied', 'warning'); return; }
   const idx = orderItemCount++;
   const container = document.getElementById('orderItemsContainer');
   const div = document.createElement('div');
@@ -118,6 +189,7 @@ function recalcTotal() {
 }
 
 async function submitOrder() {
+  if (!canCreateOrder()) { showToast('Access denied', 'warning'); return; }
   const vendorId = document.getElementById('orderVendor').value;
   if (!vendorId) { showToast('Select a vendor', 'warning'); return; }
   const items = [];
@@ -176,10 +248,17 @@ async function viewOrderDetails(id) {
 }
 
 async function changeStatus(id, status) {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   try {
     await api.patch('/api/orders/' + id + '/status', { status });
     showToast('Order status updated to ' + status);
     bootstrap.Modal.getInstance(document.getElementById('orderDetailModal')).hide();
     loadOrders();
   } catch(err) { showToast(err.message, 'danger'); }
+}
+
+// Backward-compatible: the table currently calls openStatusModal()
+// (older UI). Reuse the existing order details modal.
+function openStatusModal(id) {
+  viewOrderDetails(id);
 }

@@ -2,7 +2,25 @@
 let currentPage = 0, totalPages = 0, allCategories = [], allVendors = [];
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadFilters();
+  try {
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q) document.getElementById('searchInput').value = q;
+  } catch (_) {}
+
+  let action = null;
+  try {
+    action = new URLSearchParams(window.location.search).get('action');
+  } catch (_) {}
+
+  loadFilters().then(() => {
+    if (action === 'add') {
+      if (typeof isAdmin === 'function' && !isAdmin()) {
+        if (typeof showToast === 'function') showToast('Admin access required', 'warning');
+        return;
+      }
+      if (typeof openAddProductModal === 'function') openAddProductModal();
+    }
+  });
   loadProducts();
   let timer;
   document.getElementById('searchInput').addEventListener('input', () => {
@@ -30,7 +48,7 @@ async function loadProducts() {
   const catId   = document.getElementById('categoryFilter').value;
   const lowOnly = document.getElementById('lowStockFilter').checked;
   const tbody   = document.getElementById('productTableBody');
-  tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+  tbody.innerHTML = skeletonTableRows(7, 6, { firstTdClass: 'ps-4', lastTdClass: 'pe-4 text-end' });
   try {
     if (lowOnly) {
       const list = await api.get('/api/products/low-stock');
@@ -58,7 +76,21 @@ async function loadProducts() {
 function renderRows(products) {
   const tbody = document.getElementById('productTableBody');
   if (!products.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">No products found</td></tr>';
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="py-0">
+          <div class="empty-state empty-state--table">
+            <div class="icon"><i class="bi bi-box-seam"></i></div>
+            <div class="title">No products found</div>
+            <div class="subtitle">Try clearing filters or adjusting your search.</div>
+            <div class="actions">
+              <button type="button" class="btn btn-sm btn-primary" onclick="openAddProductModal()">
+                <i class="bi bi-plus-lg me-1"></i> Add Product
+              </button>
+            </div>
+          </div>
+        </td>
+      </tr>`;
     return;
   }
   const catMap = {};
@@ -69,11 +101,15 @@ function renderRows(products) {
       : (p.quantity <= p.lowStockThreshold)
         ? '<span class="badge status-LOW">Low Stock</span>'
         : '<span class="badge status-OK">In Stock</span>';
-    let actions = '<button class="btn btn-action btn-outline-success" title="Stock" onclick="openStockModal(\'' + p.id + '\',\'' + p.name.replace(/'/g,"") + '\')"><i class="bi bi-arrow-up-down"></i></button>';
+    let actions = '';
+    if (canUpdateStock()) {
+      actions += '<button class="btn btn-action btn-outline-success" title="Stock" onclick="openStockModal(\'' + p.id + '\',\'' + p.name.replace(/'/g,"") + '\')"><i class="bi bi-arrow-up-down"></i></button>';
+    }
     if (isAdmin()) {
       actions += '<button class="btn btn-action btn-outline-primary" onclick="openEditProductModal(\'' + p.id + '\')"><i class="bi bi-pencil"></i></button>';
       actions += '<button class="btn btn-action btn-outline-danger" onclick="openDeleteModal(\'' + p.id + '\')"><i class="bi bi-trash3"></i></button>';
     }
+    if (!actions) actions = '<span class="text-muted small">-</span>';
     return '<tr>'
       + '<td class="ps-4"><div class="fw-semibold">' + p.name + '</div><small class="text-muted">' + (p.unit||'') + '</small></td>'
       + '<td><code class="small">' + p.sku + '</code></td>'
@@ -123,6 +159,7 @@ function populateModalDropdowns(selCat, selVen) {
 }
 
 function openAddProductModal() {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   document.getElementById('productId').value = '';
   document.getElementById('productForm').reset();
   document.getElementById('productModalTitle').textContent = 'Add Product';
@@ -131,6 +168,7 @@ function openAddProductModal() {
 }
 
 async function openEditProductModal(id) {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   try {
     const p = await api.get('/api/products/' + id);
     document.getElementById('productId').value      = p.id;
@@ -149,6 +187,7 @@ async function openEditProductModal(id) {
 }
 
 async function saveProduct() {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   const id = document.getElementById('productId').value;
   const payload = {
     name:              document.getElementById('pName').value.trim(),
@@ -174,6 +213,7 @@ async function saveProduct() {
 }
 
 function openStockModal(id, name) {
+  if (!canUpdateStock()) { showToast('Access denied', 'warning'); return; }
   document.getElementById('stockProductId').value = id;
   document.getElementById('stockProductName').textContent = name;
   document.getElementById('stockChange').value = '';
@@ -182,6 +222,7 @@ function openStockModal(id, name) {
 }
 
 async function submitStockUpdate() {
+  if (!canUpdateStock()) { showToast('Access denied', 'warning'); return; }
   const id     = document.getElementById('stockProductId').value;
   const change = parseInt(document.getElementById('stockChange').value);
   const reason = document.getElementById('stockReason').value.trim() || 'Stock update';
@@ -195,11 +236,13 @@ async function submitStockUpdate() {
 }
 
 function openDeleteModal(id) {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   document.getElementById('deleteProductId').value = id;
   new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 
 async function confirmDeleteProduct() {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   const id = document.getElementById('deleteProductId').value;
   try {
     await api.delete('/api/products/' + id);

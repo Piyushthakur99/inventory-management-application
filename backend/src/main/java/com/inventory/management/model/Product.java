@@ -25,6 +25,7 @@ public class Product {
 
     private int quantity;
     private int lowStockThreshold; // alert when quantity <= this
+    private int leadTime = 5;      // supplier lead time in days
 
     private String unit;           // pieces, kg, liters, boxes, etc.
     private boolean active = true;

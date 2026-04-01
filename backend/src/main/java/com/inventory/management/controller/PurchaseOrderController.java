@@ -21,7 +21,7 @@ public class PurchaseOrderController {
     private PurchaseOrderService orderService;
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','STAFF')")
     public ResponseEntity<PurchaseOrder> createOrder(@Valid @RequestBody PurchaseOrderDTO dto) {
         return ResponseEntity.ok(orderService.createOrder(dto));
     }

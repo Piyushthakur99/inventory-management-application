@@ -1,5 +1,18 @@
 // vendors.js - Vendor management page
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q) document.getElementById('searchInput').value = q;
+  } catch (_) {}
   loadVendors();
   let timer;
   document.getElementById('searchInput').addEventListener('input', () => {
@@ -11,7 +24,27 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadVendors() {
   const search = document.getElementById('searchInput').value.trim();
   const grid = document.getElementById('vendorGrid');
-  grid.innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-primary"></div></div>';
+  grid.innerHTML = Array.from({ length: 6 }).map(() => {
+    return `
+      <div class="col-sm-6 col-xl-4">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <span class="skeleton skeleton-circle" style="width:48px;height:48px;"></span>
+              <div class="flex-grow-1">
+                <span class="skeleton skeleton-text sk-w-70 d-block mb-2"></span>
+                <span class="skeleton skeleton-text skeleton-sm sk-w-40 d-block"></span>
+              </div>
+            </div>
+            <div class="d-flex flex-column gap-2">
+              <span class="skeleton skeleton-text sk-w-90 d-block"></span>
+              <span class="skeleton skeleton-text sk-w-70 d-block"></span>
+              <span class="skeleton skeleton-text sk-w-50 d-block"></span>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
   try {
     let vendors = await api.get('/api/vendors');
     if (search) vendors = vendors.filter(v =>
@@ -21,14 +54,38 @@ async function loadVendors() {
     document.getElementById('vendorCount').textContent = vendors.length + ' vendors';
     renderVendorCards(vendors);
   } catch(err) {
-    grid.innerHTML = '<div class="col-12 text-center text-danger py-4">' + err.message + '</div>';
+    grid.innerHTML = `
+      <div class="col-12">
+        <div class="empty-state">
+          <div class="icon"><i class="bi bi-exclamation-triangle"></i></div>
+          <div class="title">Couldn’t load vendors</div>
+          <div class="subtitle">${escapeHtml(err.message || 'Please try again.')}</div>
+          <div class="actions">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadVendors()">
+              <i class="bi bi-arrow-repeat me-1"></i> Retry
+            </button>
+          </div>
+        </div>
+      </div>`;
   }
 }
 
 function renderVendorCards(vendors) {
   const grid = document.getElementById('vendorGrid');
   if (!vendors.length) {
-    grid.innerHTML = '<div class="col-12 text-center text-muted py-5">No vendors found</div>';
+    grid.innerHTML = `
+      <div class="col-12">
+        <div class="empty-state">
+          <div class="icon"><i class="bi bi-building"></i></div>
+          <div class="title">No vendors found</div>
+          <div class="subtitle">Try a different search or add a new vendor.</div>
+          <div class="actions">
+            <button type="button" class="btn btn-sm btn-primary" onclick="openAddVendorModal()">
+              <i class="bi bi-plus-lg me-1"></i> Add Vendor
+            </button>
+          </div>
+        </div>
+      </div>`;
     return;
   }
   grid.innerHTML = vendors.map(v => {
@@ -55,6 +112,7 @@ function renderVendorCards(vendors) {
 }
 
 function openAddVendorModal() {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   document.getElementById('vendorId').value = '';
   document.getElementById('vendorForm').reset();
   document.getElementById('vendorModalTitle').textContent = 'Add Vendor';
@@ -62,6 +120,7 @@ function openAddVendorModal() {
 }
 
 async function openEditVendorModal(id) {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   try {
     const v = await api.get('/api/vendors/' + id);
     document.getElementById('vendorId').value      = v.id;
@@ -78,6 +137,7 @@ async function openEditVendorModal(id) {
 }
 
 async function saveVendor() {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   const id = document.getElementById('vendorId').value;
   const payload = {
     name:          document.getElementById('vName').value.trim(),
@@ -97,11 +157,13 @@ async function saveVendor() {
 }
 
 function openDeleteVendorModal(id) {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   document.getElementById('deleteVendorId').value = id;
   new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 
 async function confirmDeleteVendor() {
+  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
   const id = document.getElementById('deleteVendorId').value;
   try {
     await api.delete('/api/vendors/' + id);

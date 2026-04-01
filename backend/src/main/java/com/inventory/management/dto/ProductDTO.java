@@ -34,5 +34,8 @@ public class ProductDTO {
     @Min(value = 0, message = "Low stock threshold cannot be negative")
     private int lowStockThreshold = 10;
 
+    @Min(value = 1, message = "Lead time must be at least 1 day")
+    private int leadTime = 5;
+
     private String unit; // pieces, kg, liters, boxes, etc.
 }

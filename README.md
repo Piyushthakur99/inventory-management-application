@@ -50,6 +50,8 @@ mvn -version
 mongod --version
 ```
 
+If you don't want to install MongoDB locally, you can also run MongoDB using Docker.
+
 ## 4. Configure Database
 
 Default backend configuration is already set in `backend/src/main/resources/application.properties`:
@@ -61,6 +63,36 @@ server.port=8080
 ```
 
 If you use MongoDB Atlas, update the URI in the same file.
+
+### 4.1 MongoDB via Docker (recommended for quick local setup)
+
+Run MongoDB on a non-default port to avoid conflicts with an existing local MongoDB service:
+
+```powershell
+docker run -d --name inventory-mongo -p 27018:27017 mongo:7
+```
+
+Then run the backend with an override URI:
+
+```powershell
+cd backend
+$env:SPRING_DATA_MONGODB_URI="mongodb://localhost:27018/inventory_db"
+mvn spring-boot:run
+```
+
+## 4.2 Email Alerts (Gmail SMTP)
+
+The backend includes an email + in-app notification system. Email sending uses Gmail SMTP via Spring Boot Mail.
+
+Set environment variables before running the backend:
+
+```powershell
+$env:GMAIL_USERNAME="youraddress@gmail.com"
+$env:GMAIL_APP_PASSWORD="your_gmail_app_password"
+$env:ALERT_RECIPIENTS="admin1@example.com,admin2@example.com"
+```
+
+If email credentials are not set, the app will still run; it will just skip sending emails.
 
 ## 5. Build, Run, and Verify Backend
 
@@ -88,6 +120,21 @@ Backend base URL:
 ```text
 http://localhost:8080
 ```
+
+Health check (no auth required):
+
+```text
+http://localhost:8080/actuator/health
+```
+
+### Demo users (fresh DB)
+
+On a fresh database, the backend seeds these demo accounts by default:
+
+- `admin` / `admin123` (ROLE_ADMIN)
+- `staff` / `staff123` (ROLE_STAFF)
+
+Disable this behavior by setting `app.demo.seed-users=false`.
 
 ## 6. Run Frontend
 
@@ -123,7 +170,9 @@ For protected APIs, add header:
 Authorization: Bearer {{token}}
 ```
 
-### Step 1: Register Admin User (Add Role in Postman)
+### Step 1 (optional): Register Admin User (Add Role in Postman)
+
+If you are using the demo seeded users, you can skip registration and go directly to login.
 
 Request:
 
@@ -262,7 +311,7 @@ To change role of an existing user, update the user document in MongoDB (`users`
 
 ### Purchase Orders
 
-- `POST /api/orders` (ADMIN)
+- `POST /api/orders` (ADMIN, STAFF)
 - `PATCH /api/orders/{id}/status` (ADMIN)
 - `GET /api/orders`
 - `GET /api/orders/{id}`
@@ -304,6 +353,24 @@ Update status body:
 ### Dashboard
 
 - `GET /api/dashboard/stats`
+
+### Predictions
+
+- `GET /api/predictions/demand`
+
+Seed demo transactions for Demand Prediction:
+
+- If you have `mongosh` installed locally:
+
+```powershell
+mongosh --file backend/scripts/seed-demand-demo.mongosh.js
+```
+
+- If you don't have `mongosh`, run it via Docker (targets your local MongoDB):
+
+```powershell
+docker run --rm -v "${PWD}/backend/scripts:/scripts" mongo:7 mongosh "mongodb://host.docker.internal:27017/inventory_db" --file /scripts/seed-demand-demo.mongosh.js
+```
 
 ## 10. Troubleshooting
 

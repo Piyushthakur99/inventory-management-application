@@ -19,10 +19,23 @@ function getUser()   {
   const raw = localStorage.getItem(USER_KEY);
   return raw ? JSON.parse(raw) : null;
 }
+function getRoles() {
+  const u = getUser();
+  return (u && Array.isArray(u.roles)) ? u.roles : [];
+}
 function isLoggedIn() { return !!getToken(); }
 function isAdmin() {
-  const u = getUser();
-  return u && u.roles && u.roles.includes('ROLE_ADMIN');
+  return getRoles().includes('ROLE_ADMIN');
+}
+
+function canUpdateStock() {
+  const roles = getRoles();
+  return roles.includes('ROLE_ADMIN') || roles.includes('ROLE_STAFF');
+}
+
+function canCreateOrder() {
+  const roles = getRoles();
+  return roles.includes('ROLE_ADMIN') || roles.includes('ROLE_STAFF');
 }
 
 /* ── Login ────────────────────────────────────────────────────── */

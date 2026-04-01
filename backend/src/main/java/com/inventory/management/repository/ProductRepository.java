@@ -9,6 +9,7 @@ import java.util.List;
 
 public interface ProductRepository extends MongoRepository<Product, String> {
     Page<Product> findByActiveTrue(Pageable pageable);
+    List<Product> findByActiveTrue();
     List<Product> findByCategoryId(String categoryId);
     List<Product> findByVendorId(String vendorId);
     List<Product> findByActiveTrueAndQuantityLessThanEqual(int threshold);

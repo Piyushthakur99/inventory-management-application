@@ -23,7 +23,7 @@ async function loadInventoryStats() {
 
 async function loadTransactions() {
   const tbody = document.getElementById('txTableBody');
-  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+  tbody.innerHTML = skeletonTableRows(8, 7, { firstTdClass: 'ps-4', lastTdClass: '' });
   try {
     const data = await api.get('/api/inventory/transactions?page=0&size=200');
     allTx = data.content || [];
@@ -59,7 +59,16 @@ function applyFilters() {
 function renderTransactions(txList) {
   const tbody = document.getElementById('txTableBody');
   if (!txList.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-5">No transactions found</td></tr>';
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="py-0">
+          <div class="empty-state empty-state--table">
+            <div class="icon"><i class="bi bi-clipboard-data"></i></div>
+            <div class="title">No transactions found</div>
+            <div class="subtitle">Try searching by product name or changing the type filter.</div>
+          </div>
+        </td>
+      </tr>`;
     return;
   }
   tbody.innerHTML = txList.map(t => {

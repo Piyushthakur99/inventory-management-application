@@ -7,7 +7,7 @@
 
 ---
 
-## 📦 Step 1: Install MongoDB (Choose ONE Option)
+## 📦 Step 1: Set up MongoDB (Choose ONE Option)
 
 ### Option A: Windows Installer (Recommended for Local Development)
 
@@ -52,6 +52,22 @@
    - Stop the current backend (Ctrl+C in terminal)
    - Run: `cd backend; mvn spring-boot:run`
 
+### Option C: MongoDB via Docker (Fast local setup)
+
+Run MongoDB in a container. Using a non-default port helps avoid conflicts if MongoDB is already installed locally.
+
+```powershell
+docker run -d --name inventory-mongo -p 27018:27017 mongo:7
+```
+
+Start backend with an override URI:
+
+```powershell
+cd backend
+$env:SPRING_DATA_MONGODB_URI = "mongodb://localhost:27018/inventory_db"
+mvn spring-boot:run
+```
+
 ---
 
 ## 🧪 Step 2: Test the Application
@@ -62,7 +78,18 @@ Open in browser or use curl:
 http://localhost:8080/actuator/health
 ```
 
-### 2.2 Register Admin User
+> Note: `/actuator/health` is public (no JWT required).
+
+### 2.2 Demo Login (recommended on a fresh DB)
+
+On a fresh database, the backend seeds these demo users by default:
+
+- **Admin:** `admin` / `admin123`
+- **Staff:** `staff` / `staff123`
+
+Disable demo-user seeding by setting `app.demo.seed-users=false` in `backend/src/main/resources/application.properties`.
+
+### 2.3 Register Admin User (optional)
 
 **Option A: Using Browser Console**
 1. Open browser Developer Tools (F12)
@@ -112,7 +139,7 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/auth/register" `
 }
 ```
 
-### 2.3 Login to Frontend
+### 2.4 Login to Frontend
 1. Go to the frontend (should be open in browser)
 2. Login with:
    - **Username:** `admin`
@@ -129,6 +156,48 @@ Once logged in, you can:
 - ✅ Track **Inventory** levels
 - ✅ Create **Purchase Orders**
 - ✅ View **Dashboard** with analytics
+
+---
+
+## 📈 Demand Prediction (Demo Seed + Verify)
+
+The Demand Prediction feature uses the last **30 days** of `inventory_transactions` (OUT transactions) to calculate average daily usage and predicts the next **7 days**.
+
+### 1) Seed demo transactions (optional, recommended for first-time verification)
+
+From the project root:
+
+If you have `mongosh` installed:
+
+```powershell
+mongosh --file backend/scripts/seed-demand-demo.mongosh.js
+```
+
+If you don't have `mongosh`, run it via Docker (targets your local MongoDB at port 27017):
+
+```powershell
+docker run --rm -v "${PWD}/backend/scripts:/scripts" mongo:7 mongosh "mongodb://host.docker.internal:27017/inventory_db" --file /scripts/seed-demand-demo.mongosh.js
+```
+
+This creates demo products (IDs starting with `DEMO_`) and inserts the last-30-days OUT transactions with `referenceId=DEMO_SEED`.
+
+### 2) Verify in the dashboard
+
+- Open `frontend/dashboard.html` (prefer Live Server)
+- You should see the **Demand Prediction** section populated
+
+### 3) Verify via API
+
+- `GET /api/predictions/demand` (requires JWT)
+
+If you want to test quickly from PowerShell:
+
+```powershell
+$loginBody = @{ username = "admin"; password = "admin123" } | ConvertTo-Json
+$token = (Invoke-RestMethod -Uri "http://localhost:8080/api/auth/login" -Method Post -ContentType "application/json" -Body $loginBody).token
+
+Invoke-RestMethod -Uri "http://localhost:8080/api/predictions/demand" -Headers @{ Authorization = "Bearer $token" }
+```
 
 ---
 
@@ -252,6 +321,9 @@ Minor project2/
 
 ### Dashboard
 - `GET /api/dashboard/stats` - Get dashboard statistics
+
+### Predictions
+- `GET /api/predictions/demand` - Demand prediction for next 7 days
 
 ---
 
