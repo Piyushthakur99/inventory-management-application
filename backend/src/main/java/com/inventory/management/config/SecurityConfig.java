@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -57,8 +58,14 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers("/api/auth/**").permitAll()
                     .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
-                .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
-                .requestMatchers("/", "/index.html", "/*.html", "/error").permitAll()
+                    .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
+                    .requestMatchers("/", "/index.html", "/*.html", "/error").permitAll()
+
+                    // API access rules:
+                    // - VIEWER: read-only (GET)
+                    // - STAFF/ADMIN: full access
+                    .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("ADMIN", "STAFF", "VIEWER")
+                    .requestMatchers("/api/**").hasAnyRole("ADMIN", "STAFF")
                     .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

@@ -24,6 +24,6 @@ public class RegisterRequest {
     @NotBlank(message = "Full name is required")
     private String fullName;
 
-    // If null/empty, defaults to ROLE_STAFF
+    // If null/empty, defaults to ROLE_STAFF. Examples: ROLE_ADMIN, ROLE_STAFF, ROLE_VIEWER
     private Set<String> roles;
 }

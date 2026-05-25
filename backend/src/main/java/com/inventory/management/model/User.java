@@ -28,7 +28,7 @@ public class User {
     private String password;
     private String fullName;
 
-    // ROLE_ADMIN or ROLE_STAFF
+    // ROLE_ADMIN, ROLE_STAFF, or ROLE_VIEWER
     private Set<String> roles;
 
     private boolean active = true;
