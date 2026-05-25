@@ -48,6 +48,8 @@ This repo includes a Render Blueprint at `render.yaml` so you can deploy without
 
 After deploy, your app URL will be the single public URL for both frontend + backend.
 
+Note: Render uses `/actuator/health/liveness` as the service health check so deploys don't fail if MongoDB is briefly unavailable during startup.
+
 #### Environment variables to set on the host
 
 - `MONGODB_URI` = your Atlas connection string

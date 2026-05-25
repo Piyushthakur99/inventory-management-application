@@ -5,7 +5,7 @@ services:
     plan: free
     dockerfilePath: backend/Dockerfile
     dockerContext: .
-    healthCheckPath: /actuator/health
+    healthCheckPath: /actuator/health/liveness
     envVars:
       - key: MONGODB_URI
         sync: false
