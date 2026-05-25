@@ -63,3 +63,23 @@ docker run --rm -v "${PWD}:/work" mongo:7 mongorestore `
 ```
 
 (If you need to overwrite existing collections in Atlas, add `--drop` to the `mongorestore` command.)
+
+## Troubleshooting
+
+### Error: `unescaped @ sign in user info`
+
+Your Atlas password contains reserved URL characters (commonly `@`).
+
+Fix options:
+- Reset the Atlas DB user password to **letters + numbers only** (recommended), then update your `ATLAS_URI`.
+- Or URL-encode special characters in the password (example: `@` → `%40`).
+
+### Error: `bad auth : authentication failed`
+
+This means the Atlas username/password is wrong (or you’re targeting the wrong cluster/project).
+
+Checklist:
+- Atlas → **Database Access**: confirm the DB user name exactly matches your URI.
+- Reset the DB user password, then update `ATLAS_URI`.
+- Atlas → **Network Access**: ensure `0.0.0.0/0` is present while testing.
+- Verify the URI includes the database name, e.g. `/inventory_db?...`.
