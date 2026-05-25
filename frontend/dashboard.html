@@ -8,10 +8,10 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
   <link href="css/style.css" rel="stylesheet" />
 </head>
-<body>
+<body class="page-dashboard">
 
 <!-- Sidebar -->
-<div class="d-flex">
+<div class="d-flex section page-shell">
   <nav id="sidebar" class="sidebar d-flex flex-column p-3">
     <div class="brand mb-4 d-flex align-items-center gap-2">
       <i class="bi bi-boxes fs-3 text-primary"></i>
@@ -85,7 +85,49 @@
       </div>
     </header>
 
-    <div class="p-4">
+    <div class="p-4 section bg-mid">
+      <!-- Hero -->
+      <section class="dashboard-hero section bg-dashboard-hero mb-4 vf-reveal">
+        <div class="hero-inner">
+          <div class="hero-copy">
+            <div class="hero-eyebrow">Inventory insights</div>
+            <h1 class="hero-title">Track stock, purchases, and trends in one place</h1>
+            <div class="hero-subtitle">Live stats, reorder signals, and demand prediction — optimized for fast decisions.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Feature cards (3) -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <div class="card feature-card h-100 vf-reveal">
+            <div class="card-body">
+              <div class="feature-icon"><i class="bi bi-clipboard-data"></i></div>
+              <div class="fw-bold">Realtime Inventory</div>
+              <div class="text-muted small">Monitor stock movements and low-stock items instantly.</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card feature-card h-100 vf-reveal">
+            <div class="card-body">
+              <div class="feature-icon"><i class="bi bi-graph-up"></i></div>
+              <div class="fw-bold">Purchase Analytics</div>
+              <div class="text-muted small">Spot spending patterns and top products/vendors.</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card feature-card h-100 vf-reveal">
+            <div class="card-body">
+              <div class="feature-icon"><i class="bi bi-cpu"></i></div>
+              <div class="fw-bold">Demand Prediction</div>
+              <div class="text-muted small">Forecast usage to plan ordering and prevent stockouts.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Date Range Filter -->
       <div class="d-flex flex-wrap gap-3 align-items-end justify-content-between mb-3">
         <div>
@@ -116,7 +158,7 @@
         <a class="btn btn-primary btn-sm admin-only" href="products.html">
           <i class="bi bi-plus-lg me-1"></i> Add Product
         </a>
-        <a class="btn btn-outline-primary btn-sm" href="purchase-orders.html">
+        <a class="btn btn-outline-primary btn-sm" href="purchase-orders.html?action=create">
           <i class="bi bi-cart-plus me-1"></i> Create Order
         </a>
         <a class="btn btn-outline-primary btn-sm admin-only" href="vendors.html">
@@ -398,6 +440,67 @@
           </div>
         </div>
       </div>
+
+      <!-- Analytics section (wave background) -->
+      <section class="analytics-section section bg-analytics-wave mt-4 vf-reveal">
+        <div class="analytics-inner">
+          <div class="analytics-title">Analytics</div>
+          <div class="analytics-subtitle">A fast overview of what matters most.</div>
+          <div class="row g-3 mt-2">
+            <div class="col-md-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <div class="fw-bold">Top movers</div>
+                  <div class="text-muted small">See which products are moving fastest.</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <div class="fw-bold">Reorder signals</div>
+                  <div class="text-muted small">Catch low-stock and critical items early.</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <div class="fw-bold">Spend visibility</div>
+                  <div class="text-muted small">Track purchase spending by vendor and product.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Testimonial section (globe background + glass card) -->
+      <section class="testimonial-section section bg-testimonial-globe mt-4 vf-reveal">
+        <div class="testimonial-inner">
+          <div class="card testimonial-card">
+            <div class="card-body">
+              <div class="testimonial-quote">“We cut stockouts and improved reorder accuracy in days. The dashboard makes our purchasing decisions feel effortless.”</div>
+              <div class="testimonial-user">
+                <div class="testimonial-avatar" aria-hidden="true">VF</div>
+                <div>
+                  <div class="testimonial-name">Operations Lead</div>
+                  <div class="testimonial-role text-muted small">Inventory &amp; Purchasing</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="px-4 pb-4">
+      <footer class="app-footer section bg-footer vf-reveal">
+        <div class="footer-inner">
+          <div class="fw-semibold">VendorFlow</div>
+          <div class="footer-muted small">Inventory &amp; Vendor Management</div>
+        </div>
+      </footer>
     </div>
   </main>
 </div>

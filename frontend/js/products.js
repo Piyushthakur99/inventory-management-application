@@ -103,7 +103,7 @@ function renderRows(products) {
         : '<span class="badge status-OK">In Stock</span>';
     let actions = '';
     if (canUpdateStock()) {
-      actions += '<button class="btn btn-action btn-outline-success" title="Stock" onclick="openStockModal(\'' + p.id + '\',\'' + p.name.replace(/'/g,"") + '\')"><i class="bi bi-arrow-up-down"></i></button>';
+      actions += '<button class="btn btn-action btn-outline-success" title="Stock" onclick="openStockModal(\'' + p.id + '\',\'' + p.name.replace(/'/g,"") + '\')"><i class="bi bi-arrow-down-up"></i></button>';
     }
     if (isAdmin()) {
       actions += '<button class="btn btn-action btn-outline-primary" onclick="openEditProductModal(\'' + p.id + '\')"><i class="bi bi-pencil"></i></button>';

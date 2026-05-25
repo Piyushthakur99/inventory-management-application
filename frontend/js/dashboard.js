@@ -3,12 +3,20 @@
 let orderChart = null;
 let donutChart  = null;
 let latestReorderSuggestions = [];
+let latestStats = null;
 
 let activeRange = null; // { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('currentDate').textContent =
-    new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const currentDateEl = document.getElementById('currentDate');
+  if (currentDateEl) {
+    currentDateEl.textContent = new Date().toLocaleDateString('en-IN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }
   setDashboardSkeleton();
   initDateRangeFilter();
   initNotifications();
@@ -63,6 +71,13 @@ function initDashboardShortcuts() {
 }
 
 function setDashboardSkeleton() {
+  const makeTableSkeleton = (colCount, rowCount, opts) => {
+    if (typeof skeletonTableRows === 'function') {
+      return skeletonTableRows(colCount, rowCount, opts);
+    }
+    return `<tr><td colspan="${colCount}" class="text-center text-muted py-3">Loading...</td></tr>`;
+  };
+
   // Stat cards
   const statIds = ['totalProducts', 'totalVendors', 'lowStockCount', 'pendingOrders'];
   statIds.forEach((id) => {
@@ -72,16 +87,16 @@ function setDashboardSkeleton() {
 
   // Tables
   const topProductsBody = document.getElementById('topProductsTableBody');
-  if (topProductsBody) topProductsBody.innerHTML = skeletonTableRows(3, 5);
+  if (topProductsBody) topProductsBody.innerHTML = makeTableSkeleton(3, 5);
 
   const topVendorsBody = document.getElementById('topVendorsTableBody');
-  if (topVendorsBody) topVendorsBody.innerHTML = skeletonTableRows(3, 5);
+  if (topVendorsBody) topVendorsBody.innerHTML = makeTableSkeleton(3, 5);
 
   const demandBody = document.getElementById('demandPredictionTableBody');
-  if (demandBody) demandBody.innerHTML = skeletonTableRows(4, 6, { firstTdClass: 'ps-4' });
+  if (demandBody) demandBody.innerHTML = makeTableSkeleton(4, 6, { firstTdClass: 'ps-4' });
 
   const lowStockBody = document.getElementById('lowStockTableBody');
-  if (lowStockBody) lowStockBody.innerHTML = skeletonTableRows(5, 6, { firstTdClass: 'ps-4' });
+  if (lowStockBody) lowStockBody.innerHTML = makeTableSkeleton(5, 6, { firstTdClass: 'ps-4' });
 }
 
 function initAiDemandPrediction() {
@@ -161,34 +176,117 @@ function trendBadge(trend) {
 let notificationsPollTimer = null;
 let notificationsInitialized = false;
 
-async function loadDashboard() {
-  try {
-    const range = activeRange;
-    const qs = range?.from && range?.to
-      ? `?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`
-      : '';
+const VF_REORDER_DISMISSED_KEY = 'vf_reorder_dismissed_v1';
 
-    const [stats, insights, logs, reorderSuggestions, demandPredictions] = await Promise.all([
+function getDismissedReorderIds() {
+  try {
+    const raw = localStorage.getItem(VF_REORDER_DISMISSED_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function setDismissedReorderIds(ids) {
+  try {
+    const unique = Array.from(new Set((Array.isArray(ids) ? ids : []).map(String))).filter(Boolean);
+    localStorage.setItem(VF_REORDER_DISMISSED_KEY, JSON.stringify(unique));
+  } catch (_) {}
+}
+
+function filterDismissedSuggestions(suggestions) {
+  const list = Array.isArray(suggestions) ? suggestions : [];
+  const dismissed = new Set(getDismissedReorderIds());
+  return list.filter(s => {
+    const id = String(s?.productId ?? s?.id ?? '').trim();
+    if (!id) return true;
+    return !dismissed.has(id);
+  });
+}
+
+function dismissReorderSuggestion(productId) {
+  const id = String(productId || '').trim();
+  if (!id) return;
+  const cur = getDismissedReorderIds();
+  cur.push(id);
+  setDismissedReorderIds(cur);
+  // Re-render everything for consistent counts (grid + insights)
+  loadDashboard();
+}
+
+async function loadDashboard() {
+  const range = activeRange;
+  const qs = range?.from && range?.to
+    ? `?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`
+    : '';
+
+  const safe = (fn, ...args) => {
+    try {
+      fn(...args);
+    } catch (e) {
+      console.error('Dashboard render failed:', e);
+    }
+  };
+
+  try {
+    const [statsR, insightsR, logsR, reorderR, demandR, productsR] = await Promise.allSettled([
       api.get('/api/dashboard/stats' + qs),
       api.get('/api/dashboard/insights' + qs),
-      api.get('/api/activity/logs').catch(() => []),
-      api.get('/api/reorder/suggestions').catch(() => []),
-      api.get('/api/predictions/demand').catch(() => []),
+      api.get('/api/activity/logs'),
+      api.get('/api/reorder/suggestions'),
+      api.get('/api/predictions/demand'),
+      api.get('/api/products?size=200'),
     ]);
 
-    latestReorderSuggestions = Array.isArray(reorderSuggestions) ? reorderSuggestions : [];
+    const stats = statsR.status === 'fulfilled' && statsR.value ? statsR.value : {};
+    latestStats = stats;
+    const insights = insightsR.status === 'fulfilled' && insightsR.value ? insightsR.value : {};
+    const logs = logsR.status === 'fulfilled' ? logsR.value : [];
+    const reorderSuggestions = reorderR.status === 'fulfilled' ? reorderR.value : [];
+    const demandPredictions = demandR.status === 'fulfilled' ? demandR.value : [];
+    const productsResp = productsR.status === 'fulfilled' ? productsR.value : null;
+    const products = Array.isArray(productsResp?.content)
+      ? productsResp.content
+      : (Array.isArray(productsResp) ? productsResp : []);
 
-    updateRangeLabels(stats);
-    renderStats(stats);
-    renderPurchaseAnalytics(stats);
-    renderCharts(stats);
-    renderLowStockTable(stats.lowStockItems || []);
-    renderInsights(insights || {}, latestReorderSuggestions, stats);
-    renderDemandPredictions(demandPredictions || []);
-    renderReorderSuggestions(latestReorderSuggestions);
-    renderRecentActivity(logs || []);
+    if (statsR.status === 'rejected') showToast('Failed to load dashboard stats', 'danger');
+    if (insightsR.status === 'rejected') showToast('Failed to load dashboard insights', 'danger');
+
+    const reorderFromEndpoint = Array.isArray(reorderSuggestions) ? reorderSuggestions : [];
+    const reorderFromInsights = Array.isArray(insights?.reorderSuggestions) ? insights.reorderSuggestions : [];
+    const reorderFallback = computeReorderFallbackFromLowStock(stats?.lowStockItems || []);
+    const reorderFromProducts = computeReorderFallbackFromProducts(products);
+    const effectiveReorderSuggestions = reorderFromEndpoint.length
+      ? reorderFromEndpoint
+      : (reorderFromInsights.length
+        ? reorderFromInsights
+        : (reorderFallback.length ? reorderFallback : reorderFromProducts));
+
+    latestReorderSuggestions = filterDismissedSuggestions(effectiveReorderSuggestions);
+
+    safe(updateRangeLabels, stats);
+    safe(renderStats, stats);
+    safe(renderPurchaseAnalytics, stats);
+    safe(renderCharts, stats);
+    safe(renderLowStockTable, stats.lowStockItems || []);
+    safe(renderInsights, insights || {}, latestReorderSuggestions, stats);
+    safe(renderDemandPredictions, demandPredictions || []);
+    safe(renderReorderSuggestions, latestReorderSuggestions);
+    safe(renderRecentActivity, logs || []);
   } catch (err) {
     console.error('Dashboard load failed:', err);
+    showToast('Dashboard failed to load', 'danger');
+
+    // Still attempt to clear skeletons by rendering empty states.
+    safe(updateRangeLabels, {});
+    safe(renderStats, {});
+    safe(renderPurchaseAnalytics, {});
+    safe(renderLowStockTable, []);
+    safe(renderInsights, {}, [], {});
+    safe(renderDemandPredictions, []);
+    safe(renderReorderSuggestions, []);
+    safe(renderRecentActivity, []);
   }
 }
 
@@ -198,7 +296,11 @@ function initDateRangeFilter() {
   const fromEl = document.getElementById('customFromDate');
   const toEl = document.getElementById('customToDate');
 
-  if (!select) return;
+  if (!select) {
+    // Fallback: still load dashboard without a date range selector.
+    loadDashboard();
+    return;
+  }
 
   const applyPreset = (days) => {
     const { from, to } = computePresetRange(days);
@@ -306,8 +408,8 @@ function renderDemandPredictions(predictions) {
     const isHigh = highDemandCutoff > 0 && predicted >= highDemandCutoff;
 
     const status = isHigh
-      ? '<span class="badge text-bg-warning">High demand</span>'
-      : '<span class="badge text-bg-light text-muted">Normal</span>';
+      ? '<span class="badge status-high">High demand</span>'
+      : '<span class="badge status-normal">Normal</span>';
 
     return `<tr class="${isHigh ? 'table-warning' : ''}">
       <td class="ps-4 fw-semibold">${name}</td>
@@ -333,13 +435,36 @@ function renderStats(s) {
 function renderPurchaseAnalytics(s) {
   setText('rangeTotalOrders', s.totalOrders ?? 0);
 
+  const formatCurrencySafe = (amount) => {
+    if (typeof formatCurrency === 'function') return formatCurrency(amount);
+    if (amount == null) return '-';
+    const n = Number(amount);
+    return Number.isFinite(n) ? String(n) : String(amount);
+  };
+
   const spendingEl = document.getElementById('rangeTotalSpending');
   if (spendingEl) {
-    spendingEl.textContent = formatCurrency(s.totalSpending ?? 0);
+    spendingEl.textContent = formatCurrencySafe(s.totalSpending ?? 0);
   }
 
-  renderTopProductsTable(s.topProducts || []);
-  renderTopVendorsTable(s.topVendors || []);
+  const topProducts = Array.isArray(s.topProducts) ? s.topProducts : [];
+  const topVendors = Array.isArray(s.topVendors) ? s.topVendors : [];
+
+  const safeNum = (x) => {
+    const n = Number(x);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const topProductsSorted = [...topProducts]
+    .sort((a, b) => safeNum(b.totalSpending) - safeNum(a.totalSpending) || safeNum(b.totalQuantity) - safeNum(a.totalQuantity))
+    .slice(0, 5);
+
+  const topVendorsSorted = [...topVendors]
+    .sort((a, b) => safeNum(b.totalSpending) - safeNum(a.totalSpending) || safeNum(b.totalOrders) - safeNum(a.totalOrders))
+    .slice(0, 5);
+
+  renderTopProductsTable(topProductsSorted);
+  renderTopVendorsTable(topVendorsSorted);
 }
 
 function renderTopProductsTable(items) {
@@ -367,7 +492,7 @@ function renderTopProductsTable(items) {
     return `<tr>
       <td class="fw-semibold">${name}</td>
       <td class="text-end">${qty}</td>
-      <td class="text-end fw-semibold">${escapeHtml(formatCurrency(p.totalSpending || 0))}</td>
+      <td class="text-end fw-semibold">${escapeHtml(typeof formatCurrency === 'function' ? formatCurrency(p.totalSpending || 0) : (p.totalSpending ?? '-'))}</td>
     </tr>`;
   }).join('');
 }
@@ -397,7 +522,7 @@ function renderTopVendorsTable(items) {
     return `<tr>
       <td class="fw-semibold">${name}</td>
       <td class="text-end">${orders}</td>
-      <td class="text-end fw-semibold">${escapeHtml(formatCurrency(v.totalSpending || 0))}</td>
+      <td class="text-end fw-semibold">${escapeHtml(typeof formatCurrency === 'function' ? formatCurrency(v.totalSpending || 0) : (v.totalSpending ?? '-'))}</td>
     </tr>`;
   }).join('');
 }
@@ -408,13 +533,49 @@ function setText(id, val) {
 }
 
 function renderCharts(s) {
-  const pending   = s.pendingOrders   ?? 0;
-  const received  = s.receivedOrders  ?? 0;
-  const cancelled = s.cancelledOrders ?? 0;
-  const approved  = (s.totalOrders ?? 0) - pending - received - cancelled;
+  const barCanvas = document.getElementById('orderChart');
+  const donutCanvas = document.getElementById('donutChart');
+
+  if (typeof Chart !== 'function') {
+    const empty = `
+      <div class="empty-state" style="padding: 18px 16px;">
+        <div class="icon"><i class="bi bi-bar-chart"></i></div>
+        <div class="title">Charts unavailable</div>
+        <div class="subtitle">Chart.js failed to load. Check your network and refresh.</div>
+      </div>`;
+
+    if (barCanvas?.parentElement) barCanvas.parentElement.innerHTML = empty;
+    if (donutCanvas?.parentElement) donutCanvas.parentElement.innerHTML = empty;
+    return;
+  }
+
+  const isDark = (document.documentElement.getAttribute('data-theme') || 'light') === 'dark'
+    || document.body.classList.contains('dark');
+
+  const textColor = isDark ? '#f1f5f9' : '#0f172a';
+  const mutedColor = isDark ? '#A0AEC0' : '#64748b';
+  const gridColor = isDark ? 'rgba(160, 174, 192, .18)' : 'rgba(226, 232, 240, .90)';
+  const tooltipBg = isDark ? 'rgba(30, 41, 59, .96)' : 'rgba(15, 23, 42, .92)';
+  const tooltipBorder = isDark ? 'rgba(255, 255, 255, .12)' : 'rgba(255, 255, 255, .14)';
+
+  const toNonNegInt = (x) => {
+    const n = Number(x);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.trunc(n));
+  };
+
+  const pending   = toNonNegInt(s.pendingOrders);
+  const received  = toNonNegInt(s.receivedOrders);
+  const cancelled = toNonNegInt(s.cancelledOrders);
+
+  const totalOrders = (s.totalOrders == null)
+    ? (pending + received + cancelled)
+    : toNonNegInt(s.totalOrders);
+
+  const approved = Math.max(0, totalOrders - pending - received - cancelled);
 
   // Bar chart
-  const barCtx = document.getElementById('orderChart');
+  const barCtx = barCanvas;
   if (barCtx) {
     if (orderChart) orderChart.destroy();
     orderChart = new Chart(barCtx, {
@@ -430,14 +591,33 @@ function renderCharts(s) {
       },
       options: {
         responsive: true,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: tooltipBg,
+            titleColor: '#ffffff',
+            bodyColor: '#ffffff',
+            borderColor: tooltipBorder,
+            borderWidth: 1,
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: mutedColor },
+            grid: { color: gridColor },
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { stepSize: 1, color: mutedColor },
+            grid: { color: gridColor },
+          },
+        },
       },
     });
   }
 
   // Donut chart
-  const donutCtx = document.getElementById('donutChart');
+  const donutCtx = donutCanvas;
   if (donutCtx) {
     if (donutChart) donutChart.destroy();
     donutChart = new Chart(donutCtx, {
@@ -448,18 +628,40 @@ function renderCharts(s) {
           data: [pending, approved, received, cancelled],
           backgroundColor: ['#fbbf24','#60a5fa','#34d399','#f87171'],
           borderWidth: 2,
+          borderColor: isDark ? 'rgba(255,255,255,.12)' : '#ffffff',
         }],
       },
       options: {
         responsive: true,
         cutout: '65%',
         plugins: {
-          legend: { position: 'bottom', labels: { padding: 12, boxWidth: 12 } },
+          legend: {
+            position: 'bottom',
+            labels: {
+              padding: 12,
+              boxWidth: 12,
+              color: mutedColor,
+            },
+          },
+          tooltip: {
+            backgroundColor: tooltipBg,
+            titleColor: '#ffffff',
+            bodyColor: '#ffffff',
+            borderColor: tooltipBorder,
+            borderWidth: 1,
+          },
         },
       },
     });
   }
 }
+
+// Keep charts readable when toggling theme
+document.addEventListener('vf-theme-change', () => {
+  if (latestStats) {
+    try { renderCharts(latestStats); } catch (_) {}
+  }
+});
 
 function renderLowStockTable(items) {
   const tbody = document.getElementById('lowStockTableBody');
@@ -486,9 +688,22 @@ function renderLowStockTable(items) {
 }
 
 function renderInsights(insights, reorderSuggestions, stats) {
-  const fast = insights.fastMovingProducts || [];
-  const slow = insights.slowMovingProducts || [];
-  const reorder = Array.isArray(reorderSuggestions) ? reorderSuggestions : (insights.reorderSuggestions || []);
+  const fastRaw = Array.isArray(insights?.fastMovingProducts) ? insights.fastMovingProducts : [];
+  const slowRaw = Array.isArray(insights?.slowMovingProducts) ? insights.slowMovingProducts : [];
+
+  const fast = [...fastRaw]
+    .sort((a, b) => Number(b.transactionCount || 0) - Number(a.transactionCount || 0)
+      || Number(b.quantityMoved || 0) - Number(a.quantityMoved || 0))
+    .slice(0, 5);
+
+  const slow = [...slowRaw]
+    .sort((a, b) => Number(a.transactionCount || 0) - Number(b.transactionCount || 0)
+      || Number(a.quantityMoved || 0) - Number(b.quantityMoved || 0))
+    .slice(0, 5);
+
+  const reorderParam = Array.isArray(reorderSuggestions) ? reorderSuggestions : [];
+  const reorderFromInsights = Array.isArray(insights?.reorderSuggestions) ? insights.reorderSuggestions : [];
+  const reorder = reorderParam.length ? reorderParam : reorderFromInsights;
 
   const from = stats?.rangeFrom || activeRange?.from;
   const to = stats?.rangeTo || activeRange?.to;
@@ -512,14 +727,105 @@ function renderInsights(insights, reorderSuggestions, stats) {
     </div>`
   );
 
-  renderInsightList('reorderList', reorder, 'No immediate reorder suggestions.', (item) => {
-    const avgDaily = Number(item.averageDailyUsage || 0).toFixed(2);
+  renderInsightList('reorderList', reorder, 'No low stock items 🎉', (item) => {
+    const avgDaily = item.averageDailyUsage == null
+      ? '–'
+      : Number(item.averageDailyUsage || 0).toFixed(2);
+    const pidRaw = String(item.productId || '').trim();
+    const pidOnclick = pidRaw.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const dismissBtn = pidRaw
+      ? `<button type="button" class="btn btn-sm btn-outline-light" onclick="dismissReorderSuggestion('${pidOnclick}')" aria-label="Dismiss reorder suggestion">
+           <i class="bi bi-trash3"></i>
+         </button>`
+      : '';
     return `<div class="insight-item">
-      <div class="fw-semibold">${escapeHtml(item.productName || '-')}</div>
+      <div class="d-flex align-items-start justify-content-between gap-2">
+        <div class="fw-semibold">${escapeHtml(item.productName || '-')}</div>
+        ${dismissBtn}
+      </div>
       <div class="text-muted">Stock: ${item.currentStock || 0} • Avg/day: ${avgDaily}</div>
-      <div class="text-danger-emphasis">Reorder: ${item.suggestedReorderQuantity || 0} units</div>
+      <div class="text-danger fw-semibold">Reorder: ${item.suggestedReorderQuantity || 0} units</div>
     </div>`;
   });
+}
+
+// Reorder suggestions (IMPORTANT): quantity <= threshold
+function getReorderSuggestions(products) {
+  const list = Array.isArray(products) ? products : [];
+  return list.filter(p => {
+    if (!p) return false;
+    const qty = Number(p.quantity);
+    const threshold = Number(
+      p.threshold ?? p.lowStockThreshold ?? p.reorderThreshold ?? p.minStock ?? p.minQuantity ?? 0
+    );
+    if (!Number.isFinite(qty) || !Number.isFinite(threshold)) return false;
+    return qty <= threshold;
+  });
+}
+
+function computeReorderFallbackFromProducts(products) {
+  const list = getReorderSuggestions(products);
+
+  const safeInt = (x) => {
+    const n = Number(x);
+    if (!Number.isFinite(n)) return 0;
+    return Math.trunc(n);
+  };
+
+  return list
+    .map(p => {
+      const currentStock = safeInt(p.quantity);
+      const threshold = Math.max(0, safeInt(
+        p.threshold ?? p.lowStockThreshold ?? p.reorderThreshold ?? p.minStock ?? p.minQuantity ?? 0
+      ));
+      const suggested = Math.max(1, threshold - currentStock);
+      const leadTimeDays = Math.max(1, safeInt(p.leadTime || p.leadTimeDays || 5));
+
+      return {
+        productId: p.id || p.productId || '',
+        productName: p.name || p.productName || '',
+        sku: p.sku || '',
+        currentStock,
+        averageDailyUsage: null,
+        leadTimeDays,
+        requiredStock: threshold,
+        suggestedReorderQuantity: suggested,
+      };
+    })
+    .sort((a, b) => a.currentStock - b.currentStock || b.suggestedReorderQuantity - a.suggestedReorderQuantity)
+    .slice(0, 10);
+}
+
+function computeReorderFallbackFromLowStock(items) {
+  const list = Array.isArray(items) ? items : [];
+
+  const safeInt = (x) => {
+    const n = Number(x);
+    if (!Number.isFinite(n)) return 0;
+    return Math.trunc(n);
+  };
+
+  return list
+    .filter(p => p && safeInt(p.quantity) <= safeInt(p.lowStockThreshold))
+    .map(p => {
+      const currentStock = safeInt(p.quantity);
+      const threshold = Math.max(0, safeInt(p.lowStockThreshold));
+      const suggested = Math.max(1, threshold - currentStock);
+      const leadTimeDays = Math.max(1, safeInt(p.leadTime || p.leadTimeDays || 5));
+
+      return {
+        productId: p.id || p.productId || '',
+        productName: p.name || p.productName || '',
+        sku: p.sku || '',
+        currentStock,
+        averageDailyUsage: null,
+        leadTimeDays,
+        requiredStock: threshold,
+        suggestedReorderQuantity: suggested,
+      };
+    })
+    .sort((a, b) => a.currentStock - b.currentStock || b.suggestedReorderQuantity - a.suggestedReorderQuantity)
+    .slice(0, 10);
 }
 
 function renderReorderSuggestions(suggestions) {
@@ -528,22 +834,33 @@ function renderReorderSuggestions(suggestions) {
 
   if (!container) return;
 
+  const list = filterDismissedSuggestions(Array.isArray(suggestions) ? suggestions : []);
+
   if (badge) {
-    badge.textContent = `${suggestions.length} ${suggestions.length === 1 ? 'item' : 'items'}`;
+    badge.textContent = `${list.length} ${list.length === 1 ? 'item' : 'items'}`;
   }
 
-  if (!suggestions.length) {
-    container.innerHTML = '<div class="text-muted">No products currently require reorder.</div>';
+  if (!list.length) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 18px 16px;">
+        <div class="icon"><i class="bi bi-check-circle"></i></div>
+        <div class="title">No low stock items 🎉</div>
+        <div class="subtitle">All products are above their low stock threshold.</div>
+      </div>`;
     return;
   }
 
-  const canCreateOrder = typeof isAdmin === 'function' && isAdmin();
+  const canCreateOrderPermitted = typeof canCreateOrder === 'function'
+    ? canCreateOrder()
+    : (typeof isAdmin === 'function' ? isAdmin() : true);
 
-  container.innerHTML = suggestions.map((item) => {
+  container.innerHTML = list.map((item) => {
     const currentStock = Number(item.currentStock || 0);
     const reorderQty = Number(item.suggestedReorderQuantity || 0);
     const isCritical = currentStock <= 0;
-    const avgDaily = Number(item.averageDailyUsage || 0).toFixed(2);
+    const avgDaily = item.averageDailyUsage == null
+      ? '–'
+      : Number(item.averageDailyUsage || 0).toFixed(2);
     const severityBadge = isCritical
       ? '<span class="badge status-CRITICAL">Critical</span>'
       : '<span class="badge status-LOW">Needs Reorder</span>';
@@ -570,23 +887,32 @@ function renderReorderSuggestions(suggestions) {
           <span class="value">${avgDaily}</span>
         </div>
       </div>
-      ${canCreateOrder
-        ? `<button class="btn btn-sm btn-danger mt-2" onclick="createReorderOrder('${item.productId}')">
-            <i class="bi bi-cart-plus me-1"></i>Create Order
-          </button>`
-        : '<div class="text-muted small mt-2">Admin permission required to create order</div>'}
+      <div class="d-flex gap-2 mt-2">
+        ${canCreateOrderPermitted
+          ? `<button class="btn btn-sm btn-danger" onclick="createOrder('${item.productId}', ${reorderQty})">
+              <i class="bi bi-cart-plus me-1"></i>Create Order
+            </button>`
+          : '<div class="text-muted small">Permission required to create order</div>'}
+
+        <button class="btn btn-sm btn-outline-light ms-auto" onclick="dismissReorderSuggestion('${item.productId}')" aria-label="Dismiss reorder suggestion">
+          <i class="bi bi-trash3 me-1"></i>Dismiss
+        </button>
+      </div>
     </div>`;
   }).join('');
 }
 
-async function createReorderOrder(productId) {
-  try {
-    await api.post(`/api/reorder/create/${productId}`, {});
-    showToast('Purchase order created from suggestion', 'success');
-    await loadDashboard();
-  } catch (err) {
-    showToast(err.message || 'Failed to create purchase order', 'danger');
-  }
+function createOrder(productId, qty) {
+  const id = String(productId || '').trim();
+  if (!id) return;
+  const q = Number(qty);
+  const qtyParam = Number.isFinite(q) && q > 0 ? `&qty=${encodeURIComponent(String(Math.trunc(q)))}` : '';
+  window.location.href = `purchase-orders.html?action=create&product=${encodeURIComponent(id)}${qtyParam}`;
+}
+
+// Backwards compatibility for older onclick handlers
+function createReorderOrder(productId) {
+  createOrder(productId);
 }
 
 function renderInsightList(containerId, items, emptyMessage, renderer) {

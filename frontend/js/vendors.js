@@ -21,13 +21,59 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+function updateVendorCountFromDom() {
+  const countEl = document.getElementById('vendorCount');
+  const grid = document.getElementById('vendorGrid');
+  if (!countEl || !grid) return;
+  const count = grid.querySelectorAll('.vendor-card').length;
+  countEl.textContent = count + ' vendors';
+}
+
+function wireDeleteButtons() {
+  document.querySelectorAll('.delete-btn').forEach((button) => {
+    if (button.dataset.vfDeleteWired === '1') return;
+    button.dataset.vfDeleteWired = '1';
+
+    button.addEventListener('click', async function () {
+      if (typeof isAdmin === 'function' && !isAdmin()) {
+        if (typeof showToast === 'function') showToast('Admin access required', 'warning');
+        return;
+      }
+
+      const card = this.closest('.vendor-card');
+      if (!card) return;
+
+      const wrapper = card.closest('.col-12, .col-sm-6, .col-md-6, .col-lg-4, .col-xl-4') || card;
+      const vendorId = this.getAttribute('data-vendor-id') || '';
+
+      if (!confirm('Are you sure you want to delete this vendor?')) return;
+
+      this.disabled = true;
+      try {
+        if (vendorId && typeof api !== 'undefined' && api && typeof api.delete === 'function') {
+          await api.delete('/api/vendors/' + encodeURIComponent(vendorId));
+          if (typeof showToast === 'function') showToast('Vendor deleted');
+        }
+      } catch (err) {
+        if (typeof showToast === 'function') showToast(err?.message || 'Delete failed (removed from view)', 'warning');
+      }
+
+      card.classList.add('is-removing');
+      setTimeout(() => {
+        wrapper.remove();
+        updateVendorCountFromDom();
+      }, 250);
+    });
+  });
+}
+
 async function loadVendors() {
   const search = document.getElementById('searchInput').value.trim();
   const grid = document.getElementById('vendorGrid');
   grid.innerHTML = Array.from({ length: 6 }).map(() => {
     return `
       <div class="col-sm-6 col-xl-4">
-        <div class="card border-0 shadow-sm h-100">
+        <div class="card vendor-card border-0 shadow-sm h-100">
           <div class="card-body">
             <div class="d-flex align-items-center gap-3 mb-3">
               <span class="skeleton skeleton-circle" style="width:48px;height:48px;"></span>
@@ -88,27 +134,62 @@ function renderVendorCards(vendors) {
       </div>`;
     return;
   }
-  grid.innerHTML = vendors.map(v => {
-    const initials = v.name.split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase();
-    const adminBtns = isAdmin() ? 
-      '<button class="btn btn-sm btn-outline-primary" onclick="openEditVendorModal(\'' + v.id + '\')"><i class="bi bi-pencil"></i></button>' +
-      '<button class="btn btn-sm btn-outline-danger" onclick="openDeleteVendorModal(\'' + v.id + '\')"><i class="bi bi-trash3"></i></button>' : '';
-    return '<div class="col-sm-6 col-xl-4">'
-      + '<div class="card border-0 shadow-sm h-100">'
-      + '<div class="card-body">'
-      + '<div class="d-flex align-items-center gap-3 mb-3">'
-      + '<div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style="width:48px;height:48px;font-size:1.1rem;">' + initials + '</div>'
-      + '<div><div class="fw-bold">' + v.name + '</div>'
-      + '<div class="text-muted small">' + (v.contactPerson||'') + '</div></div>'
-      + '</div>'
-      + '<div class="small text-muted d-flex flex-column gap-1">'
-      + (v.email ? '<span><i class="bi bi-envelope me-1"></i>' + v.email + '</span>' : '')
-      + (v.phone ? '<span><i class="bi bi-telephone me-1"></i>' + v.phone + '</span>' : '')
-      + (v.city  ? '<span><i class="bi bi-geo-alt me-1"></i>' + (v.city||'') + ', ' + (v.country||'') + '</span>' : '')
-      + '</div></div>'
-      + '<div class="card-footer bg-transparent d-flex gap-2 justify-content-end">' + adminBtns + '</div>'
-      + '</div></div>';
+  grid.innerHTML = vendors.map((v) => {
+    const rawName = String(v?.name || '').trim();
+    const safeName = escapeHtml(rawName || 'Vendor');
+    const safeContact = escapeHtml(v?.contactPerson || '');
+    const safeEmail = escapeHtml(v?.email || '');
+    const safePhone = escapeHtml(v?.phone || '');
+    const safeCity = escapeHtml(v?.city || '');
+    const safeCountry = escapeHtml(v?.country || '');
+
+    const initials = (rawName
+      ? rawName.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('')
+      : 'V'
+    ).toUpperCase();
+
+    const idRaw = String(v?.id ?? '');
+    const idArg = JSON.stringify(v?.id ?? '');
+    const adminBtns = isAdmin() ? `
+      <button type="button" class="btn btn-icon btn-outline-primary" onclick="openEditVendorModal(${idArg})" aria-label="Edit vendor">
+        <i class="bi bi-pencil"></i>
+      </button>
+      <button type="button" class="btn btn-icon btn-outline-danger delete-btn" data-vendor-id="${escapeHtml(idRaw)}" aria-label="Delete vendor">
+        <i class="bi bi-trash3"></i>
+      </button>` : '';
+
+    const locationLine = (safeCity || safeCountry)
+      ? `<span><i class="bi bi-geo-alt me-1"></i>${safeCity}${(safeCity && safeCountry) ? ', ' : ''}${safeCountry}</span>`
+      : '';
+
+    return `
+      <div class="col-sm-6 col-xl-4">
+        <div class="card vendor-card border-0 shadow-sm h-100">
+          <div class="card-body">
+            <div class="vendor-top">
+              <div class="vendor-avatar" aria-hidden="true">${escapeHtml(initials)}</div>
+              <div class="min-w-0">
+                <div class="vendor-name text-truncate">${safeName}</div>
+                <div class="vendor-contact text-truncate">${safeContact}</div>
+              </div>
+            </div>
+
+            <div class="vendor-meta">
+              ${safeEmail ? `<span><i class="bi bi-envelope me-1"></i>${safeEmail}</span>` : ''}
+              ${safePhone ? `<span><i class="bi bi-telephone me-1"></i>${safePhone}</span>` : ''}
+              ${locationLine}
+            </div>
+          </div>
+
+          <div class="card-footer vendor-actions d-flex gap-2 justify-content-end">
+            ${adminBtns}
+          </div>
+        </div>
+      </div>`;
   }).join('');
+
+  // Wire delete handlers after dynamic render.
+  wireDeleteButtons();
 }
 
 function openAddVendorModal() {

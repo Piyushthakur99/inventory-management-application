@@ -92,6 +92,40 @@
     });
   }
 
+  /* ── Scroll reveal (fade-in on scroll) ─────────────────────── */
+  function wireRevealOnScroll() {
+    const elements = Array.from(document.querySelectorAll('.vf-reveal, [data-vf-reveal]'));
+    if (!elements.length) return;
+
+    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      elements.forEach((el) => el.classList.add('is-visible'));
+      return;
+    }
+
+    if (!('IntersectionObserver' in window)) {
+      elements.forEach((el) => el.classList.add('is-visible'));
+      return;
+    }
+
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        if (entry.target.classList.contains('fade')) {
+          entry.target.classList.add('show');
+        }
+        io.unobserve(entry.target);
+      });
+    }, {
+      root: null,
+      threshold: 0.08,
+      rootMargin: '0px 0px -10% 0px',
+    });
+
+    elements.forEach((el) => io.observe(el));
+  }
+
   /* ── Theme (light/dark) ─────────────────────────────────────── */
   function getTheme() {
     try {
@@ -106,10 +140,15 @@
     const next = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', next);
     document.documentElement.style.colorScheme = next;
+    document.body.classList.toggle('dark', next === 'dark');
+    document.body.classList.toggle('light', next !== 'dark');
     try {
       localStorage.setItem(THEME_KEY, next);
     } catch (_) {}
     syncThemeToggleUi();
+    try {
+      document.dispatchEvent(new CustomEvent('vf-theme-change', { detail: { theme: next } }));
+    } catch (_) {}
   }
 
   function toggleTheme() {
@@ -439,16 +478,29 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    setTheme(getTheme());
+    const isLoginPage = document.body.classList.contains('page-login') || document.body.classList.contains('login-page');
+    if (isLoginPage) {
+      // Login page is always dark mode (do NOT overwrite saved preference).
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.style.colorScheme = 'dark';
+      document.body.classList.add('dark');
+      document.body.classList.remove('light');
+      // Ensure no theme toggle is visible/usable on the login page.
+      document.querySelectorAll('[data-theme-toggle]').forEach((el) => el.remove());
+      syncThemeToggleUi();
+    } else {
+      setTheme(getTheme());
+    }
     // Apply persisted collapsed state only on desktop.
     if (!isMobile()) setCollapsed(getCollapsed());
     wireToggleButtons();
-    wireThemeToggleButtons();
+    if (!isLoginPage) wireThemeToggleButtons();
     wireGlobalSearch();
     wireAutoCloseOnNav();
     wireEscClose();
     wireResize();
     pageEnter();
+    wireRevealOnScroll();
   });
 
   // Expose a tiny API (optional)

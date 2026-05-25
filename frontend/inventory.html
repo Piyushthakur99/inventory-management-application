@@ -8,8 +8,8 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
   <link href="css/style.css" rel="stylesheet" />
 </head>
-<body>
-<div class="d-flex">
+<body class="page-inventory">
+<div class="d-flex section page-shell">
   <nav id="sidebar" class="sidebar d-flex flex-column p-3">
     <div class="brand mb-4 d-flex align-items-center gap-2">
       <i class="bi bi-boxes fs-3 text-primary"></i>
@@ -49,12 +49,15 @@
           <input class="gs-input" type="search" placeholder="Search products, vendors, orders…" autocomplete="off" spellcheck="false" data-global-search-input />
           <div class="global-search-dropdown" data-global-search-dropdown style="display:none;"></div>
         </div>
+        <button class="btn btn-light" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">
+          <i class="bi bi-moon-stars"></i>
+        </button>
         <a href="products.html" class="btn btn-outline-primary btn-sm">
           <i class="bi bi-box-seam me-1"></i> Manage Products
         </a>
       </div>
     </header>
-    <div class="p-4">
+    <div class="p-4 section bg-mid">
       <div class="row g-4 mb-4">
         <div class="col-md-4">
           <div class="card border-0 shadow-sm text-center p-3">
@@ -124,6 +127,15 @@
           <nav><ul class="pagination pagination-sm mb-0" id="txPagination"></ul></nav>
         </div>
       </div>
+    </div>
+
+    <div class="px-4 pb-4">
+      <footer class="app-footer section bg-footer vf-reveal">
+        <div class="footer-inner">
+          <div class="fw-semibold">VendorFlow</div>
+          <div class="footer-muted small">Inventory &amp; Vendor Management</div>
+        </div>
+      </footer>
     </div>
   </main>
 </div>

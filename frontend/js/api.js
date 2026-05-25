@@ -75,6 +75,26 @@ async function apiFetch(path, options = {}) {
     ...(options.headers || {}),
   };
 
+  const parseBody = async (res) => {
+    if (res.status === 204) return null;
+
+    // Read as text first so we can safely handle JSON, plain-text, or empty bodies.
+    const raw = await res.text().catch(() => '');
+    const text = String(raw || '').trim();
+    if (!text) return null;
+
+    const ct = String(res.headers.get('content-type') || '').toLowerCase();
+    const looksJson = text.startsWith('{') || text.startsWith('[');
+    if (ct.includes('application/json') || looksJson) {
+      try {
+        return JSON.parse(text);
+      } catch (_) {
+        // Fall back to returning raw text.
+      }
+    }
+    return text;
+  };
+
   try {
     const res = await fetch(BASE_URL + path, { ...options, headers });
 
@@ -84,12 +104,16 @@ async function apiFetch(path, options = {}) {
     }
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Request failed' }));
-      throw new Error(err.message || 'Request failed');
+      const errBody = await parseBody(res);
+      const message = (errBody && typeof errBody === 'object' && errBody.message)
+        ? errBody.message
+        : (typeof errBody === 'string' && errBody)
+          ? errBody
+          : 'Request failed';
+      throw new Error(message);
     }
 
-    if (res.status === 204) return null;
-    return res.json();
+    return await parseBody(res);
   } finally {
     stopGlobalLoading();
   }
@@ -117,12 +141,13 @@ function showToast(message, type = 'success') {
 
   const safeMessage = escapeHtml(String(message ?? ''));
   const html = `
-    <div id="${id}" class="toast align-items-center text-white bg-${bsType} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div id="${id}" class="toast vf-toast vf-toast--${bsType}" role="alert" aria-live="assertive" aria-atomic="true">
       <div class="d-flex">
         <div class="toast-body d-flex align-items-center gap-2">
-          <i class="bi bi-${icon}"></i> ${safeMessage}
+          <i class="bi bi-${icon}"></i>
+          <span>${safeMessage}</span>
         </div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
       </div>
     </div>`;
   container.insertAdjacentHTML('beforeend', html);
@@ -135,7 +160,7 @@ function showToast(message, type = 'success') {
 function createToastContainer() {
   const div = document.createElement('div');
   div.id = 'toastContainer';
-  div.className = 'toast-container position-fixed top-0 end-0 p-3';
+  div.className = 'toast-container vf-toast-container position-fixed top-0 end-0 p-3';
   div.style.zIndex = '9999';
   document.body.appendChild(div);
   return div;

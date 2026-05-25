@@ -15,6 +15,14 @@ public interface InventoryTransactionRepository extends MongoRepository<Inventor
     List<InventoryTransaction> findByPerformedBy(String username);
     List<InventoryTransaction> findByTransactionDateGreaterThanEqual(LocalDateTime since);
 
+        boolean existsByTransactionDateGreaterThanEqualAndTransactionTypeIgnoreCaseAndReferenceIdNot(
+            LocalDateTime since,
+            String transactionType,
+            String referenceId
+        );
+
+    long deleteByReferenceId(String referenceId);
+
     List<InventoryTransaction> findByTransactionDateBetween(LocalDateTime from, LocalDateTime to);
 
     @Aggregation(pipeline = {

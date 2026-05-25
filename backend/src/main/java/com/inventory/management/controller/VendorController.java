@@ -35,9 +35,9 @@ public class VendorController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<String> deleteVendor(@PathVariable String id) {
+    public ResponseEntity<Void> deleteVendor(@PathVariable String id) {
         vendorService.deleteVendor(id);
-        return ResponseEntity.ok("Vendor deleted successfully");
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping

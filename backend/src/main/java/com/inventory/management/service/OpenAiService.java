@@ -39,7 +39,12 @@ public class OpenAiService {
 
     public Optional<AiDemandResponseDTO> predictDemand(AiDemandRequestDTO request) {
         String apiKey = properties.getApiKey();
-        if (!properties.isEnabled() || !StringUtils.hasText(apiKey)) {
+        if (!properties.isEnabled()) {
+            log.info("OpenAI integration disabled (openai.enabled=false)");
+            return Optional.empty();
+        }
+        if (!StringUtils.hasText(apiKey)) {
+            log.warn("OpenAI integration enabled but API key is missing (openai.api-key is blank)");
             return Optional.empty();
         }
 
@@ -50,6 +55,7 @@ public class OpenAiService {
                     .build();
 
             String url = normalizeBaseUrl(properties.getBaseUrl()) + "/chat/completions";
+            log.info("Calling OpenAI chat.completions (model={}, baseUrl={})", properties.getModel(), normalizeBaseUrl(properties.getBaseUrl()));
 
             String prompt = buildPrompt(request);
 
@@ -68,15 +74,19 @@ public class OpenAiService {
 
             ResponseEntity<String> response = restTemplate.postForEntity(url, new HttpEntity<>(body, headers), String.class);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                log.warn("OpenAI returned non-success status: {}", response.getStatusCode());
                 return Optional.empty();
             }
 
             String content = extractAssistantContent(response.getBody());
             if (!StringUtils.hasText(content)) {
+                log.warn("OpenAI response missing assistant content");
                 return Optional.empty();
             }
 
             AiDemandResponseDTO parsed = objectMapper.readValue(content, AiDemandResponseDTO.class);
+            int count = (parsed == null || parsed.getPredictions() == null) ? 0 : parsed.getPredictions().size();
+            log.info("OpenAI response parsed successfully (predictions={})", count);
             return Optional.ofNullable(parsed);
         } catch (Exception ex) {
             log.warn("OpenAI call failed: {}", ex.getMessage());

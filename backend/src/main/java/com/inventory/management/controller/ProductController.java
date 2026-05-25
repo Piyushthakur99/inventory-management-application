@@ -36,9 +36,9 @@ public class ProductController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<String> deleteProduct(@PathVariable String id) {
+    public ResponseEntity<Void> deleteProduct(@PathVariable String id) {
         productService.deleteProduct(id);
-        return ResponseEntity.ok("Product deleted successfully");
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping
@@ -63,7 +63,17 @@ public class ProductController {
     @PreAuthorize("hasAnyRole('ADMIN','STAFF')")
     public ResponseEntity<Product> updateStock(@PathVariable String id,
                                                @RequestBody Map<String, Object> body) {
-        int quantityChange = (Integer) body.get("quantityChange");
+        Object rawChange = body.get("quantityChange");
+        if (rawChange == null) {
+            throw new IllegalArgumentException("quantityChange is required");
+        }
+
+        int quantityChange;
+        if (rawChange instanceof Number n) {
+            quantityChange = n.intValue();
+        } else {
+            quantityChange = Integer.parseInt(String.valueOf(rawChange));
+        }
         String reason = (String) body.getOrDefault("reason", "Stock update");
         return ResponseEntity.ok(productService.updateStock(id, quantityChange, reason));
     }

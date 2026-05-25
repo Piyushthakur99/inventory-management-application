@@ -15,18 +15,30 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch (_) {}
 
   let action = null;
+  let productId = null;
+  let qty = null;
   try {
-    action = new URLSearchParams(window.location.search).get('action');
+    const params = new URLSearchParams(window.location.search);
+    action = params.get('action');
+    productId = params.get('product');
+    qty = params.get('qty');
   } catch (_) {}
 
   const prereqsPromise = loadPrereqs();
-  prereqsPromise.then(() => {
-    if (action === 'create') {
-      openCreateOrderModal();
-    }
-  });
+  prereqsPromise
+    .then(() => {
+      const id = String(productId || '').trim();
+      const n = Number(qty);
+      const prefillQty = Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
 
-  loadOrders();
+      if (action === 'create' || id) {
+        openCreateOrderModal({ productId: id || null, quantity: prefillQty });
+      }
+    })
+    .finally(() => {
+      // Orders depend on vendors/products to render cleanly (names, searches).
+      loadOrders();
+    });
 
   const searchEl = document.getElementById('orderSearch');
   if (searchEl) {
@@ -80,7 +92,7 @@ function applyOrderFilters() {
     if (!q) return true;
 
     const orderNo = String(o.orderNumber || '').toLowerCase();
-    const vendorName = String(venMap[o.vendorId] || o.vendorId || '').toLowerCase();
+    const vendorName = String(venMap[o.vendorId] || o.vendorName || o.vendorId || '').toLowerCase();
     const st = String(o.status || '').toLowerCase();
     return orderNo.includes(q) || vendorName.includes(q) || st.includes(q);
   });
@@ -113,11 +125,15 @@ function renderOrderRows(orders) {
   const venMap = {};
   allVendors.forEach(v => { venMap[v.id] = v.name; });
   tbody.innerHTML = orders.map(o => {
+    const vendorName = venMap[o.vendorId] || o.vendorName || '';
+    const vendorDisplayHtml = vendorName
+      ? escapeHtml(vendorName)
+      : '<span class="text-muted">-</span>';
     const statusBadgeHtml = '<span class="badge status-' + o.status + '">' + o.status + '</span>';
     const admin = isAdmin() ? '<button class="btn btn-action btn-outline-info" onclick="openStatusModal(\'' + o.id + '\',\'' + o.status + '\')"><i class="bi bi-pencil-square"></i> Status</button>' : '';
     return '<tr>'
       + '<td class="ps-4 fw-semibold">' + o.orderNumber + '</td>'
-      + '<td>' + (venMap[o.vendorId]||o.vendorId) + '</td>'
+      + '<td>' + vendorDisplayHtml + '</td>'
       + '<td>' + (o.items ? o.items.length : 0) + ' items</td>'
       + '<td>' + formatCurrency(o.totalAmount) + '</td>'
       + '<td>' + statusBadgeHtml + '</td>'
@@ -129,8 +145,11 @@ function renderOrderRows(orders) {
   }).join('');
 }
 
-function openCreateOrderModal() {
+function openCreateOrderModal(opts) {
   if (!canCreateOrder()) { showToast('Access denied', 'warning'); return; }
+  const productId = String(opts?.productId || '').trim();
+  const qty = Number(opts?.quantity);
+  const prefillQty = Number.isFinite(qty) && qty > 0 ? Math.trunc(qty) : null;
   orderItemCount = 0;
   document.getElementById('orderItemsContainer').innerHTML = '';
   document.getElementById('orderVendor').innerHTML = '<option value="">-- Select Vendor --</option>';
@@ -142,12 +161,15 @@ function openCreateOrderModal() {
   document.getElementById('orderNotes').value = '';
   document.getElementById('orderDelivery').value = '';
   document.getElementById('orderTotal').textContent = '0.00';
-  addOrderItem();
+  addOrderItem({ productId: productId || null, quantity: prefillQty });
   new bootstrap.Modal(document.getElementById('orderModal')).show();
 }
 
-function addOrderItem() {
+function addOrderItem(defaults) {
   if (!canCreateOrder()) { showToast('Access denied', 'warning'); return; }
+  const productId = String(defaults?.productId || '').trim();
+  const qty = Number(defaults?.quantity);
+  const prefillQty = Number.isFinite(qty) && qty > 0 ? Math.trunc(qty) : null;
   const idx = orderItemCount++;
   const container = document.getElementById('orderItemsContainer');
   const div = document.createElement('div');
@@ -162,6 +184,20 @@ function addOrderItem() {
     + '<div class="col-md-3"><input type="number" class="form-control form-control-sm item-price" step="0.01" min="0" oninput="recalcTotal()" placeholder="Unit Price" /></div>'
     + '<div class="col-md-2"><button class="btn btn-sm btn-outline-danger w-100" onclick="removeItem('+idx+')"><i class="bi bi-trash3"></i></button></div>';
   container.appendChild(div);
+
+  if (productId) {
+    const sel = document.querySelector('#item_' + idx + ' .item-product');
+    if (sel) {
+      sel.value = productId;
+      updateItemPrice(idx);
+    }
+  }
+
+  if (prefillQty != null) {
+    const qtyEl = document.querySelector('#item_' + idx + ' .item-qty');
+    if (qtyEl) qtyEl.value = String(prefillQty);
+    recalcTotal();
+  }
 }
 
 function updateItemPrice(idx) {
@@ -222,12 +258,13 @@ async function viewOrderDetails(id) {
     const o = await api.get('/api/orders/' + id);
     const venMap = {};
     allVendors.forEach(v => { venMap[v.id] = v.name; });
+    const vendorDisplay = venMap[o.vendorId] || o.vendorName || '-';
     const itemsHtml = (o.items||[]).map(i =>
       '<tr><td>' + i.productName + '</td><td>' + i.quantity + '</td><td>' + formatCurrency(i.unitPrice) + '</td><td>' + formatCurrency(i.totalPrice) + '</td></tr>'
     ).join('');
     document.getElementById('orderDetailTitle').textContent = 'Order: ' + o.orderNumber;
     document.getElementById('orderDetailBody').innerHTML =
-      '<div class="row mb-3"><div class="col-md-6"><small class="text-muted">Vendor</small><div class="fw-semibold">' + (venMap[o.vendorId]||o.vendorId) + '</div></div>'
+      '<div class="row mb-3"><div class="col-md-6"><small class="text-muted">Vendor</small><div class="fw-semibold">' + escapeHtml(vendorDisplay) + '</div></div>'
       + '<div class="col-md-3"><small class="text-muted">Status</small><div><span class="badge status-'+o.status+'">'+o.status+'</span></div></div>'
       + '<div class="col-md-3"><small class="text-muted">Order Date</small><div>' + formatDate(o.orderDate) + '</div></div></div>'
       + '<table class="table table-sm"><thead class="table-light"><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>'
