@@ -1,6 +1,24 @@
 // ── api.js ─ Fetch wrapper with JWT auto-attach ────────────────────
 
-const BASE_URL = 'http://localhost:8080';
+function resolveApiBaseUrl() {
+  const explicit = (window.__API_BASE_URL__ || '').toString().trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
+
+  const { protocol, hostname, port, origin } = window.location;
+
+  // Local dev convenience: when using Live Server or opening the file directly.
+  if (protocol === 'file:') return 'http://localhost:8080';
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // If the page itself is served by the backend, use same-origin.
+    if (!port || port === '8080') return origin;
+    return 'http://localhost:8080';
+  }
+
+  // Deployed: assume backend serves the frontend (same origin).
+  return origin;
+}
+
+const BASE_URL = resolveApiBaseUrl();
 
 /* ── Global loading indicator (for all API calls) ─────────────── */
 let __vfLoadingCount = 0;

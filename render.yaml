@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: inventory-management
+    runtime: docker
+    plan: free
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_DEMO_SEED_USERS
+        value: "false"
+      - key: APP_EMAIL_ENABLED
+        value: "false"

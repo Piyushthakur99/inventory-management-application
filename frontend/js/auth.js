@@ -2,7 +2,25 @@
 
 const TOKEN_KEY = 'vf_token';
 const USER_KEY  = 'vf_user';
-const API_BASE  = 'http://localhost:8080';
+function resolveApiBaseUrl() {
+  const explicit = (window.__API_BASE_URL__ || '').toString().trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
+
+  const { protocol, hostname, port, origin } = window.location;
+
+  // Local dev convenience: when using Live Server or opening the file directly.
+  if (protocol === 'file:') return 'http://localhost:8080';
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // If the page itself is served by the backend, use same-origin.
+    if (!port || port === '8080') return origin;
+    return 'http://localhost:8080';
+  }
+
+  // Deployed: assume backend serves the frontend (same origin).
+  return origin;
+}
+
+const API_BASE = resolveApiBaseUrl();
 
 /* ── Storage helpers ─────────────────────────────────────────── */
 function saveAuth(data) {
