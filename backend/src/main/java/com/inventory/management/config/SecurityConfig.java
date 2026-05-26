@@ -56,7 +56,10 @@ public class SecurityConfig {
             .sessionManagement(session ->
                     session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                    .requestMatchers("/api/auth/**").permitAll()
+                // Auth
+                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                // Registration is ADMIN-only to prevent public role escalation.
+                .requestMatchers(HttpMethod.POST, "/api/auth/register").hasRole("ADMIN")
                     .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                     .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
                     .requestMatchers("/", "/index.html", "/*.html", "/error").permitAll()
