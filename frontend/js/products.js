@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   loadFilters().then(() => {
     if (action === 'add') {
-      if (typeof isAdmin === 'function' && !isAdmin()) {
+      if (typeof isAdmin === 'function' && typeof isViewer === 'function' && !isAdmin() && !isViewer()) {
         if (typeof showToast === 'function') showToast('Admin access required', 'warning');
         return;
       }
@@ -102,10 +102,10 @@ function renderRows(products) {
         ? '<span class="badge status-LOW">Low Stock</span>'
         : '<span class="badge status-OK">In Stock</span>';
     let actions = '';
-    if (canUpdateStock()) {
+    if (canUpdateStock() || (typeof isViewer === 'function' && isViewer())) {
       actions += '<button class="btn btn-action btn-outline-success" title="Stock" onclick="openStockModal(\'' + p.id + '\',\'' + p.name.replace(/'/g,"") + '\')"><i class="bi bi-arrow-down-up"></i></button>';
     }
-    if (isAdmin()) {
+    if (isAdmin() || (typeof isViewer === 'function' && isViewer())) {
       actions += '<button class="btn btn-action btn-outline-primary" onclick="openEditProductModal(\'' + p.id + '\')"><i class="bi bi-pencil"></i></button>';
       actions += '<button class="btn btn-action btn-outline-danger" onclick="openDeleteModal(\'' + p.id + '\')"><i class="bi bi-trash3"></i></button>';
     }
@@ -159,7 +159,7 @@ function populateModalDropdowns(selCat, selVen) {
 }
 
 function openAddProductModal() {
-  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
+  if (!isAdmin() && !(typeof isViewer === 'function' && isViewer())) { showToast('Admin access required', 'warning'); return; }
   document.getElementById('productId').value = '';
   document.getElementById('productForm').reset();
   document.getElementById('productModalTitle').textContent = 'Add Product';
@@ -168,7 +168,7 @@ function openAddProductModal() {
 }
 
 async function openEditProductModal(id) {
-  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
+  if (!isAdmin() && !(typeof isViewer === 'function' && isViewer())) { showToast('Admin access required', 'warning'); return; }
   try {
     const p = await api.get('/api/products/' + id);
     document.getElementById('productId').value      = p.id;
@@ -213,7 +213,7 @@ async function saveProduct() {
 }
 
 function openStockModal(id, name) {
-  if (!canUpdateStock()) { showToast('Access denied', 'warning'); return; }
+  if (!canUpdateStock() && !(typeof isViewer === 'function' && isViewer())) { showToast('Access denied', 'warning'); return; }
   document.getElementById('stockProductId').value = id;
   document.getElementById('stockProductName').textContent = name;
   document.getElementById('stockChange').value = '';
@@ -236,7 +236,7 @@ async function submitStockUpdate() {
 }
 
 function openDeleteModal(id) {
-  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
+  if (!isAdmin() && !(typeof isViewer === 'function' && isViewer())) { showToast('Admin access required', 'warning'); return; }
   document.getElementById('deleteProductId').value = id;
   new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }

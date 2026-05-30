@@ -150,7 +150,7 @@ function renderVendorCards(vendors) {
 
     const idRaw = String(v?.id ?? '');
     const idArg = JSON.stringify(v?.id ?? '');
-    const adminBtns = isAdmin() ? `
+    const adminBtns = (isAdmin() || (typeof isViewer === 'function' && isViewer())) ? `
       <button type="button" class="btn btn-icon btn-outline-primary" onclick="openEditVendorModal(${idArg})" aria-label="Edit vendor">
         <i class="bi bi-pencil"></i>
       </button>
@@ -193,7 +193,7 @@ function renderVendorCards(vendors) {
 }
 
 function openAddVendorModal() {
-  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
+  if (!isAdmin() && !(typeof isViewer === 'function' && isViewer())) { showToast('Admin access required', 'warning'); return; }
   document.getElementById('vendorId').value = '';
   document.getElementById('vendorForm').reset();
   document.getElementById('vendorModalTitle').textContent = 'Add Vendor';
@@ -201,7 +201,7 @@ function openAddVendorModal() {
 }
 
 async function openEditVendorModal(id) {
-  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
+  if (!isAdmin() && !(typeof isViewer === 'function' && isViewer())) { showToast('Admin access required', 'warning'); return; }
   try {
     const v = await api.get('/api/vendors/' + id);
     document.getElementById('vendorId').value      = v.id;
@@ -238,7 +238,7 @@ async function saveVendor() {
 }
 
 function openDeleteVendorModal(id) {
-  if (!isAdmin()) { showToast('Admin access required', 'warning'); return; }
+  if (!isAdmin() && !(typeof isViewer === 'function' && isViewer())) { showToast('Admin access required', 'warning'); return; }
   document.getElementById('deleteVendorId').value = id;
   new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }

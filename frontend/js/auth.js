@@ -46,6 +46,18 @@ function isAdmin() {
   return getRoles().includes('ROLE_ADMIN');
 }
 
+function isViewer() {
+  return getRoles().includes('ROLE_VIEWER');
+}
+
+function getRoleLabel() {
+  const roles = getRoles();
+  if (roles.includes('ROLE_ADMIN')) return 'Admin';
+  if (roles.includes('ROLE_VIEWER')) return 'Viewer';
+  if (roles.includes('ROLE_STAFF')) return 'Staff';
+  return 'User';
+}
+
 function canUpdateStock() {
   const roles = getRoles();
   return roles.includes('ROLE_ADMIN') || roles.includes('ROLE_STAFF');
@@ -98,11 +110,11 @@ function populateUserInfo() {
   const headerEl   = document.getElementById('headerUsername');
 
   if (usernameEl) usernameEl.textContent = user.fullName || user.username;
-  if (roleEl)     roleEl.textContent     = isAdmin() ? 'Admin' : 'Staff';
+  if (roleEl)     roleEl.textContent     = getRoleLabel();
   if (headerEl)   headerEl.textContent   = user.fullName || user.username;
 
-  // Hide admin-only buttons for staff
-  if (!isAdmin()) {
+  // Hide admin-only buttons for staff (VIEWER should see admin UI but cannot perform actions).
+  if (!isAdmin() && !isViewer()) {
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
   }
 }

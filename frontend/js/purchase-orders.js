@@ -130,7 +130,9 @@ function renderOrderRows(orders) {
       ? escapeHtml(vendorName)
       : '<span class="text-muted">-</span>';
     const statusBadgeHtml = '<span class="badge status-' + o.status + '">' + o.status + '</span>';
-    const admin = isAdmin() ? '<button class="btn btn-action btn-outline-info" onclick="openStatusModal(\'' + o.id + '\',\'' + o.status + '\')"><i class="bi bi-pencil-square"></i> Status</button>' : '';
+    const admin = (isAdmin() || (typeof isViewer === 'function' && isViewer()))
+      ? '<button class="btn btn-action btn-outline-info" onclick="openStatusModal(\'' + o.id + '\',\'' + o.status + '\')"><i class="bi bi-pencil-square"></i> Status</button>'
+      : '';
     return '<tr>'
       + '<td class="ps-4 fw-semibold">' + o.orderNumber + '</td>'
       + '<td>' + vendorDisplayHtml + '</td>'
@@ -146,7 +148,7 @@ function renderOrderRows(orders) {
 }
 
 function openCreateOrderModal(opts) {
-  if (!canCreateOrder()) { showToast('Access denied', 'warning'); return; }
+  if (!canCreateOrder() && !(typeof isViewer === 'function' && isViewer())) { showToast('Access denied', 'warning'); return; }
   const productId = String(opts?.productId || '').trim();
   const qty = Number(opts?.quantity);
   const prefillQty = Number.isFinite(qty) && qty > 0 ? Math.trunc(qty) : null;
@@ -166,7 +168,7 @@ function openCreateOrderModal(opts) {
 }
 
 function addOrderItem(defaults) {
-  if (!canCreateOrder()) { showToast('Access denied', 'warning'); return; }
+  if (!canCreateOrder() && !(typeof isViewer === 'function' && isViewer())) { showToast('Access denied', 'warning'); return; }
   const productId = String(defaults?.productId || '').trim();
   const qty = Number(defaults?.quantity);
   const prefillQty = Number.isFinite(qty) && qty > 0 ? Math.trunc(qty) : null;
@@ -272,10 +274,10 @@ async function viewOrderDetails(id) {
       + '<tfoot><tr><td colspan="3" class="text-end fw-bold">Grand Total</td><td class="fw-bold">' + formatCurrency(o.totalAmount) + '</td></tr></tfoot></table>'
       + (o.notes ? '<p class="text-muted small mt-2">Notes: ' + o.notes + '</p>' : '');
     const actionsDiv = document.getElementById('orderDetailActions');
-    if (isAdmin() && o.status === 'PENDING') {
+    if ((isAdmin() || (typeof isViewer === 'function' && isViewer())) && o.status === 'PENDING') {
       actionsDiv.innerHTML = '<button class="btn btn-success me-2" onclick="changeStatus(\'' + o.id + '\', \'APPROVED\')">Approve</button>'
         + '<button class="btn btn-danger" onclick="changeStatus(\'' + o.id + '\', \'CANCELLED\')">Cancel</button>';
-    } else if (isAdmin() && o.status === 'APPROVED') {
+    } else if ((isAdmin() || (typeof isViewer === 'function' && isViewer())) && o.status === 'APPROVED') {
       actionsDiv.innerHTML = '<button class="btn btn-primary" onclick="changeStatus(\'' + o.id + '\', \'RECEIVED\')">Mark Received</button>';
     } else {
       actionsDiv.innerHTML = '<button class="btn btn-light" data-bs-dismiss="modal">Close</button>';

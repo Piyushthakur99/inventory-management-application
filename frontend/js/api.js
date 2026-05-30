@@ -86,6 +86,21 @@ function stopGlobalLoading() {
 /* ── Core fetch wrapper ─────────────────────────────────────────── */
 async function apiFetch(path, options = {}) {
   startGlobalLoading();
+
+  const method = String(options.method || 'GET').toUpperCase();
+  const isWrite = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+  if (isWrite) {
+    try {
+      const roles = (typeof getRoles === 'function') ? (getRoles() || []) : [];
+      if (Array.isArray(roles) && roles.includes('ROLE_VIEWER')) {
+        if (typeof showToast === 'function') showToast('Unauthorized access: admin authorization required', 'warning');
+        throw new Error('Unauthorized access');
+      }
+    } catch (e) {
+      // If role detection fails, fall through to backend enforcement.
+    }
+  }
+
   const token = getToken();
   const headers = {
     'Content-Type': 'application/json',
@@ -118,7 +133,8 @@ async function apiFetch(path, options = {}) {
 
     if (res.status === 401) { logout(); return; }
     if (res.status === 403) {
-      throw new Error('Forbidden');
+      if (typeof showToast === 'function') showToast('Unauthorized access: admin authorization required', 'warning');
+      throw new Error('Unauthorized access');
     }
 
     if (!res.ok) {
