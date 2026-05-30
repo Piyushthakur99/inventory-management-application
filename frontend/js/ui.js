@@ -130,9 +130,12 @@
   function getTheme() {
     try {
       const val = localStorage.getItem(THEME_KEY);
-      return val === 'dark' ? 'dark' : 'light';
+      if (val === 'light') return 'light';
+      if (val === 'dark') return 'dark';
+      // Default to dark mode for first-time visitors.
+      return 'dark';
     } catch (_) {
-      return 'light';
+      return 'dark';
     }
   }
 
